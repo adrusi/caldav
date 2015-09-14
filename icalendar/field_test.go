@@ -11,9 +11,14 @@ func fieldEq(a, b Field) bool {
 	if len(a.Params) != len(b.Params) {
 		return false
 	}
-	for k, v := range a.Params {
-		if b.Params[k] != v {
+	for k := range a.Params {
+		if len(b.Params[k]) != len(a.Params[k]) {
 			return false
+		}
+		for i := range a.Params[k] {
+			if b.Params[k][i] != a.Params[k][i] {
+				return false
+			}
 		}
 	}
 	return true
@@ -24,18 +29,30 @@ func Test_readField(t *testing.T) {
 		// Some correct examples from the RFC
 		"ATTENDEE;RSVP=TRUE;ROLE=REQ-PARTICIPANT:MAILTO:jsmith@host.com": Field{
 			"ATTENDEE",
-			map[string]string{"RSVP": "TRUE", "ROLE": "REQ-PARTICIPANT"},
+			map[string][]string{
+				"RSVP": []string{"TRUE"},
+				"ROLE": []string{"REQ-PARTICIPANT"},
+			},
 			"MAILTO:jsmith@host.com",
 		},
 		"RDATE;VALUE=DATE:19970304,19970504,19970704,19970904": Field{
 			"RDATE",
-			map[string]string{"VALUE": "DATE"},
+			map[string][]string{"VALUE": []string{"DATE"}},
 			"19970304,19970504,19970704,19970904",
 		},
 		"DESCRIPTION;ALTREP=\"http://www.wiz.org\":The Fall'98 ...": Field{
 			"DESCRIPTION",
-			map[string]string{"ALTREP": "http://www.wiz.org"},
+			map[string][]string{"ALTREP": []string{"http://www.wiz.org"}},
 			"The Fall'98 ...",
+		},
+		"ATTENDEE;DELEGATED-TO=\"mailto:jdoe@example.com\"," +
+			"\"mailto:jqpublic@example.com\":mailto:jsmith@example.com": Field{
+			"ATTENDEE",
+			map[string][]string{"DELEGATED-TO": []string{
+				"mailto:jdoe@example.com",
+				"mailto:jqpublic@example.com",
+			}},
+			"mailto:jsmith@example.com",
 		},
 		// Errors
 		";VALUE=DATE:19970304":        noName,
@@ -46,7 +63,7 @@ func Test_readField(t *testing.T) {
 		"RDATE;VALUE=":                noValue, // make sure that empty params are ok
 		"RDATE;VALUE:19970304":        invalidParam,
 		"RDATE;=DATE:19970304":        emptyParamName,
-		"RDATE;VALUE=,:19980304":      illegalCharInParam,
+		"RDATE;VALUE=\b:19980304":     illegalCharInParam,
 		"RDATE;VALUE=\"DATE:19970304": invalidQuoted,
 	}
 	for str, expect := range cases {

@@ -2,11 +2,12 @@ package icalendar
 
 import (
 	"errors"
+	"time"
 )
 
 type Field struct {
 	Name   string
-	Params map[string]string
+	Params map[string][]string
 	Value  string
 }
 
@@ -39,9 +40,10 @@ func readField(str []byte) (field Field, err error) {
 		return
 	}
 	// Read in the parameter list
-	field.Params = make(map[string]string)
+	field.Params = make(map[string][]string)
 	for len(str) > 0 && str[0] != ':' {
-		var key, val string
+		var key string
+		var val []string
 		key, val, err = readParam(&str)
 		if err == endOfParams {
 			break
@@ -85,7 +87,7 @@ func readName(str *[]byte) (name string, err error) {
 	return
 }
 
-func readParam(str *[]byte) (key string, val string, err error) {
+func readParam(str *[]byte) (key string, vals []string, err error) {
 	if (*str)[0] != ';' {
 		err = endOfParams
 		return
@@ -109,33 +111,42 @@ func readParam(str *[]byte) (key string, val string, err error) {
 		return
 	}
 	*str = (*str)[1:]
-	// Read the value
-	if len(*str) == 0 {
-		val = ""
-		return
-	}
-	// quoted value
-	if (*str)[0] == '"' {
-		val, err = readQuoted(str)
-		// implicit error reporting
-		return
-	}
-	// unquoted value
-	i := 0
-	for i < len(*str) && (*str)[i] != ';' && (*str)[i] != ':' {
-		switch c := (*str)[i]; {
-		case c == '\t', c == '\n', c == '\v', c == '\r':
-			break // out of the switch
-		case c == '\x7f', c == ',', c == '"', c < ' ':
-			err = illegalCharInParam
-			return
-		default:
+	// Read the value(s)
+	for len(*str) > 0 {
+		// quoted value
+		if (*str)[0] == '"' {
+			var val string
+			val, err = readQuoted(str)
+			if err != nil {
+				return
+			}
+			vals = append(vals, val)
+		} else {
+			// unquoted value
+			i := 0
+		LOOP:
+			for i < len(*str) {
+				switch c := (*str)[i]; {
+				case c == ',', c == ';', c == ':':
+					break LOOP
+				case c == '\t', c == '\n', c == '\v', c == '\r':
+					break // out of the switch
+				case c == '\x7f', c == '"', c < ' ':
+					err = illegalCharInParam
+					return
+				default:
+				}
+				i++
+			}
+			vals = append(vals, string((*str)[:i]))
+			*str = (*str)[i:]
 		}
-		i++
+		if len(*str) > 0 && (*str)[0] == ',' {
+			*str = (*str)[1:]
+		} else {
+			break
+		}
 	}
-
-	val = string((*str)[:i])
-	*str = (*str)[i:]
 	return
 }
 
