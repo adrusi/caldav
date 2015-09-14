@@ -179,3 +179,230 @@ func readQuoted(str *[]byte) (val string, err error) {
 	*str = (*str)[i+1:] // +1 because skip the quote
 	return
 }
+
+// Returns the empty string when absent or invalid
+func (f Field) AltRep() string {
+	if val, has := f.Params["ALTREP"]; has && len(val) == 1 {
+		return val[0]
+	}
+	return ""
+}
+
+// Returns the empty string when absent or invalid
+func (f Field) CommonName() string {
+	if val, has := f.Params["CN"]; has && len(val) == 1 {
+		return val[0]
+	}
+	return ""
+}
+
+type UserType string
+
+const (
+	UTIndividual UserType = "INDIVIDUAL"
+	UTGroup               = "GROUP"
+	UTResource            = "RESOURCE"
+	UTRoom                = "ROOM"
+	UTUnknown             = "UNKNOWN"
+	// X-* usertypes also allowed
+)
+
+func (f Field) UserType() UserType {
+	if val, has := f.Params["CUTYPE"]; has && len(val) == 1 {
+		return UserType(val[0])
+	}
+	return UTIndividual
+}
+
+func (f Field) Delegators() []string {
+	if val, has := f.Params["DELEGATED-FROM"]; has {
+		return val
+	}
+	return make([]string, 0, 0)
+}
+
+func (f Field) Delegatees() []string {
+	if val, has := f.Params["DELEGATED-TO"]; has {
+		return val
+	}
+	return make([]string, 0, 0)
+}
+
+// Returns the empty string when absent or invalid
+func (f Field) DirEntryRef() string {
+	if val, has := f.Params["DIR"]; has && len(val) == 1 {
+		return val[0]
+	}
+	return ""
+}
+
+func (f Field) Encoding() string {
+	if val, has := f.Params["ENCODING"]; has && len(val) == 1 {
+		return val[0]
+	}
+	return "8BIT"
+}
+
+// Returns application/octet-stream if no fmtype is specified. It may be useful
+// to ignore this default if you have a filetype detector.
+func (f Field) FormatType() string {
+	if val, has := f.Params["FMTTYPE"]; has && len(val) == 1 {
+		return val[0]
+	}
+	return "application/octet-steam" // least specific MIME type
+}
+
+type FreeBusyType string
+
+const (
+	FBFree            FreeBusyType = "FREE"
+	FBBusy                         = "BUSY"
+	FBBusyUnavailable              = "BUSY-UNAVAILABLE"
+	FBBusyTentative                = "BUSY-TENTATIVE"
+)
+
+func (f Field) FreeBusyType() FreeBusyType {
+	if val, has := f.Params["FBTYPE"]; has && len(val) == 1 {
+		return FreeBusyType(val[0])
+	}
+	return FBBusy
+}
+
+func (f Field) Language() string {
+	// TODO there's probably some type better than string to represent language
+	// tags.
+	if val, has := f.Params["LANGUAGE"]; has && len(val) == 1 {
+		return val[0]
+	}
+	return "x-Unknown" // Is there a standard tag for unknown language?
+	// See RFC5646
+}
+
+func (f Field) Members() []string {
+	if val, has := f.Params["MEMBER"]; has {
+		return val
+	}
+	return make([]string, 0, 0)
+}
+
+type ParticipantStatus string
+
+const (
+	PSAccepted    ParticipantStatus = "ACCEPTED"
+	PSDeclined                      = "DECLINED"
+	PSTentative                     = "TENTATIVE"
+	PSDelegated                     = "DELEGATED"
+	PSCompleted                     = "COMPLETED"
+	PSInProcess                     = "IN-PROCESS"
+	PSNeedsAction                   = "NEEDS-ACTION"
+)
+
+func (f Field) ParticipantStatus() ParticipantStatus {
+	if val, has := f.Params["PARTSTAT"]; has && len(val) == 1 {
+		return ParticipantStatus(val[0])
+	}
+	return PSNeedsAction
+}
+
+func (f Field) ThisAndFuture() bool {
+	val, has := f.Params["RANGE"]
+	return has && len(val) == 1 && val[0] == "THISANDFUTURE"
+}
+
+type AlarmTriggerRelationship int
+
+const (
+	ATRStart AlarmTriggerRelationship = iota
+	ATREnd
+)
+
+func (f Field) AlarmTrigerRelationship() AlarmTriggerRelationship {
+	if val, has := f.Params["RELATED"]; has && len(val) == 1 {
+		if val[0] == "END" {
+			return ATREnd
+		}
+	}
+	return ATRStart
+}
+
+type RelationshipType string
+
+const (
+	RTParent  RelationshipType = "PARENT"
+	RTChild                    = "CHILD"
+	RTSibling                  = "SIBLING"
+)
+
+func (f Field) RelationshipType() RelationshipType {
+	if val, has := f.Params["RELTYPE"]; has && len(val) == 1 {
+		return RelationshipType(val[0])
+	}
+	return RTParent
+}
+
+type ParticipantRole string
+
+const (
+	PRChair          ParticipantRole = "CHAIR"
+	PRReqParticipant                 = "REQ-PARTICIPANT"
+	PROptParticipant                 = "OPT-PARTICIPANT"
+	PRNonParticipant                 = "NON-PARTICIPANT"
+)
+
+func (f Field) ParticipantRole() ParticipantRole {
+	if val, has := f.Params["ROLE"]; has && len(val) == 1 {
+		return ParticipantRole(val[0])
+	}
+	return PRReqParticipant
+}
+
+func (f Field) Rsvp() bool {
+	if val, has := f.Params["RSVP"]; has && len(val) == 1 && val[0] == "TRUE" {
+		return true
+	}
+	return false
+}
+
+func (f Field) SentBy() string {
+	if val, has := f.Params["SENT-BY"]; has && len(val) == 1 {
+		return val[0]
+	}
+	return ""
+}
+
+func (f Field) TimeZone() *time.Location {
+	if val, has := f.Params["TZID"]; has && len(val) == 1 {
+		loc, err := time.LoadLocation(val[0])
+		if err == nil {
+			return loc
+		}
+	}
+	loc, _ := time.LoadLocation("UTC")
+	return loc
+}
+
+type DataType string
+
+const (
+	DTBinary     DataType = "BINARY"
+	DTBoolean             = "BOOLEAN"
+	DTCalAddress          = "CAL-ADDRESS"
+	DTDate                = "DATE"
+	DTDateTime            = "DATE-TIME"
+	DTDuration            = "DURATION"
+	DTFloat               = "FLOAT"
+	DTInteger             = "INTEGER"
+	DTPeriod              = "PERIOD"
+	DTRecur               = "RECUR"
+	DTText                = "TEXT"
+	DTUri                 = "URI"
+	DTUtcOffset           = "UTC-OFFSET"
+)
+
+func (f Field) DataType() DataType {
+	if val, has := f.Params["VALUE"]; has && len(val) == 1 {
+		return DataType(val[0])
+	}
+	// TODO the default value should depend on the fieldname
+	return DTText
+}
