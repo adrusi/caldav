@@ -2,6 +2,7 @@ package icalendar
 
 import (
 	"errors"
+	"regexp"
 	"time"
 )
 
@@ -178,6 +179,85 @@ func readQuoted(str *[]byte) (val string, err error) {
 	val = string((*str)[:i])
 	*str = (*str)[i+1:] // +1 because skip the quote
 	return
+}
+
+var (
+	expectedScalar  = errors.New("Parameter expected one value; found multiple")
+	invalidEncoding = errors.New("Binary encoded fields MUST specify ENCODING=BASE64")
+	invalidMime     = errors.New("Invalid format type")
+	invalidOption   = errors.New("Unrecognized option specified")
+	invalidToken    = errors.New("Token contains invalid characters")
+)
+
+var fmttypepat = regexp.MustCompile(`^[a-zA-Z0-9!#$&.+-^_]{1,127}/[a-zA-Z0-9!#$&.+-^_]{1,127}$`)
+
+func (f Field) validate() error {
+	scalarParams := []string{
+		"ALTREP", "CN", "CUTYPE", "DIR", "ENCODING", "FMTTYPE",
+		"FBTYPE", "LANGUAGE", "PARTSTAT", "RANGE", "RELATED",
+		"ROLE", "RSVP", "SENT-BY", "TZID", "VALUE",
+	}
+	for _, paramname := range scalarParams {
+		if val, has := f.Params[paramname]; has {
+			if len(val) != 1 {
+				return expectedScalar
+			}
+		}
+	}
+	enumParams := []string{
+		"CUTYPE", "FBTYPE", "PARTSTAT", "RELTYPE", "ROLE", "VALUE",
+	}
+	for _, paramname := range enumParams {
+		if vals, has := f.Params[paramname]; has {
+			for _, val := range vals {
+				if len(val) < 1 {
+					return invalidToken
+				}
+				for _, c := range []byte(val) {
+					switch {
+					case c >= 'a' && c <= 'z',
+						c >= 'A' && c <= 'Z',
+						c >= '1' && c <= '9',
+						c == '-':
+						break
+					default:
+						return invalidToken
+					}
+				}
+			}
+		}
+	}
+	if v, hasv := f.Params["VALUE"]; hasv && v[0] == "BINARY" {
+		if e, hase := f.Params["ENCODING"]; !hase || e[0] != "BASE64" {
+			return invalidEncoding
+		}
+	}
+	if encoding, has := f.Params["ENCODING"]; has {
+		if encoding[0] != "BASE64" && encoding[0] != "8BIT" {
+			return invalidOption
+		}
+	}
+	if fmttype, has := f.Params["FMTTYPE"]; has {
+		if !fmttypepat.MatchString(fmttype[0]) {
+			return invalidMime
+		}
+	}
+	// TODO parse language tags in the LANGUAGE parameter to make sure they're
+	// RFC5646 compliant
+	if rng, has := f.Params["RANGE"]; has && rng[0] != "THISANDFUTURE" {
+		return invalidOption
+	}
+	if related, has := f.Params["RELATED"]; has {
+		if related[0] != "START" && related[0] != "END" {
+			return invalidOption
+		}
+	}
+	if rsvp, has := f.Params["RSVP"]; has {
+		if rsvp[0] != "TRUE" && rsvp[0] != "FALSE" {
+			return invalidOption
+		}
+	}
+	return nil
 }
 
 // Returns the empty string when absent or invalid
